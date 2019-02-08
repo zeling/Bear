@@ -320,8 +320,15 @@ def capture(args, category):
             return Execution(cwd=os.path.relpath(call.cwd, args.relpath),
                              pid=call.pid,
                              cmd=call.cmd)
+        def rebase_directory(call):
+            return Execution(cwd=os.path.join(args.rebase, os.path.relpath(call.cwd, args.relpath)),
+                             pid=call.pid,
+                             cmd=call.cmd)
         if args.relpath:
-            safe_calls = map(rel_directory, safe_calls)
+            if args.rebase:
+                safe_calls = map(rebase_directory, safe_calls)
+            else:
+                safe_calls = map(rel_directory, safe_calls)
         current = compilations(safe_calls, category)
 
         return exit_code, iter(set(current))
@@ -467,6 +474,11 @@ def create_intercept_parser():
         default=None,
         help="""If you would like to output the cdb based on the given
         relpath""")
+    parser.add_argument(
+        '--rebase-to',
+        dest='rebase',
+        default=None,
+        help="""If you would like to rebase the directory""")
 
     advanced = parser.add_argument_group('advanced options')
     advanced.add_argument(
