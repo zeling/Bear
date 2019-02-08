@@ -295,9 +295,9 @@ def intercept_build():
     if args.append and os.path.isfile(args.cdb):
         previous = CompilationDatabase.load(args.cdb, category)
         entries = iter(set(itertools.chain(previous, current)))
-        CompilationDatabase.save(args.cdb, entries)
+        CompilationDatabase.save(args.cdb, entries, args.rebase)
     else:
-        CompilationDatabase.save(args.cdb, current)
+        CompilationDatabase.save(args.cdb, current, args.rebase)
 
     return exit_code
 
@@ -316,19 +316,6 @@ def capture(args, category):
         # read the intercepted exec calls
         calls = (parse_exec_trace(file) for file in exec_trace_files(tmp_dir))
         safe_calls = (x for x in calls if x is not None)
-        def rel_directory(call):
-            return Execution(cwd=os.path.relpath(call.cwd, args.relpath),
-                             pid=call.pid,
-                             cmd=call.cmd)
-        def rebase_directory(call):
-            return Execution(cwd=os.path.join(args.rebase, os.path.relpath(call.cwd, args.relpath)),
-                             pid=call.pid,
-                             cmd=call.cmd)
-        if args.relpath:
-            if args.rebase:
-                safe_calls = map(rebase_directory, safe_calls)
-            else:
-                safe_calls = map(rel_directory, safe_calls)
         current = compilations(safe_calls, category)
 
         return exit_code, iter(set(current))
@@ -530,7 +517,7 @@ class Compilation:
 
         return vars(self)
 
-    def as_db_entry(self):
+    def as_db_entry(self, rebase=None):
         # type: (Compilation) -> Dict[str, Any]
         """ This method creates a compilation database entry. """
 
@@ -540,7 +527,7 @@ class Compilation:
             'file': source,
             'arguments':
                 [self.compiler, self.phase] + self.flags + output + [source],
-            'directory': self.directory
+            'directory': os.path.join(rebase, os.path.relpath(self.directory, os.getcwd())) if rebase else self.directory
         }
 
     @classmethod
@@ -672,14 +659,14 @@ class CompilationDatabase:
     """ Compilation Database persistence methods. """
 
     @staticmethod
-    def save(filename, iterator):
+    def save(filename, iterator, rebase=None):
         # type: (str, Iterable[Compilation]) -> None
         """ Saves compilations to given file.
 
-        :param filename: the destination file name
+        /param filename: the destination file name
         :param iterator: iterator of Compilation objects. """
 
-        entries = [entry.as_db_entry() for entry in iterator]
+        entries = [entry.as_db_entry(rebase) for entry in iterator]
         with open(filename, 'w') as handle:
             json.dump(entries, handle, sort_keys=True, indent=4)
 
